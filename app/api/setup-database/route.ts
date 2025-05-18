@@ -12,29 +12,18 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 async function fetchCSVData() {
   try {
     // Get the raw content URL for your CSV file
-    // This assumes the file is in a public repository
-    // You may need to adjust this URL based on your actual GitHub repository
-    const csvUrl = "/app/setup/Master_File - Hoja 1 (1).csv"
+    // Using your specific GitHub username and repository
+    const rawGithubUrl = "https://raw.githubusercontent.com/jlsabau/poder_judicial/main/app/setup/Master_File%20-%20Hoja%201%20(1).csv"
     
-    // Try to fetch the CSV file from the local project first
-    let response
-    try {
-      response = await fetch(csvUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch local CSV: ${response.status}`)
-      }
-    } catch (localError) {
-      console.log("Could not fetch local CSV, trying raw GitHub URL...")
-      // If local fetch fails, try to fetch from GitHub raw content
-      // Replace with your actual GitHub username and repository name
-      const rawGithubUrl = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/app/setup/Master_File%20-%20Hoja%201%20(1).csv"
-      response = await fetch(rawGithubUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch GitHub CSV: ${response.status}`)
-      }
+    console.log("Fetching CSV from:", rawGithubUrl)
+    const response = await fetch(rawGithubUrl)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch GitHub CSV: ${response.status} ${response.statusText}`)
     }
 
     const csvText = await response.text()
+    console.log("CSV data fetched, length:", csvText.length)
     
     // Parse the CSV data
     return new Promise((resolve, reject) => {
@@ -42,9 +31,11 @@ async function fetchCSVData() {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
+          console.log("CSV parsing complete, rows:", results.data.length)
           resolve(results.data)
         },
         error: (error) => {
+          console.error("CSV parsing error:", error)
           reject(error)
         }
       })
@@ -67,27 +58,82 @@ function categorizeDataByElection(data) {
     magistrados_de_circuito: []
   }
   
+  console.log("Categorizing data, total rows:", data.length)
+  
+  // Log the first row to see what columns are available
+  if (data.length > 0) {
+    console.log("Sample row columns:", Object.keys(data[0]))
+  }
+  
   // Categorize each row based on the "Tipo de Elección" column
+  // Also try alternative column names if that one doesn't exist
   data.forEach(row => {
-    const electionType = row["Tipo de Elección"]?.toLowerCase() || ""
+    // Try different possible column names
+    const electionType = 
+      row["Tipo de Elección"] || 
+      row["Tipo de Eleccion"] || 
+      row["tipo de elección"] || 
+      row["tipo de eleccion"] || 
+      row["Election Type"] || 
+      row["election type"] || 
+      ""
     
-    if (electionType.includes("scjn") || electionType.includes("suprema corte")) {
-      categories.scjn.push(row)
-    } else if (electionType.includes("tdj") || electionType.includes("disciplina judicial")) {
-      categories.tdj.push(row)
-    } else if (electionType.includes("sala superior") || electionType.includes("tribunal electoral")) {
-      categories.superior_tribunal_electoral.push(row)
-    } else if (electionType.includes("sala regional") || electionType.includes("regional tribunal")) {
-      categories.regional_tribunal_electoral.push(row)
-    } else if (electionType.includes("juez") || electionType.includes("jueces") || electionType.includes("distrito")) {
-      categories.jueces_de_distrito.push(row)
-    } else if (electionType.includes("magistrado") || electionType.includes("circuito")) {
-      categories.magistrados_de_circuito.push(row)
+    // Log a few rows to debug
+    if (data.indexOf(row) < 5) {
+      console.log("Row election type:", electionType, "Row:", JSON.stringify(row).substring(0, 100) + "...")
+    }
+    
+    // If we can't find an election type, try to infer it from other columns
+    let category = null
+    
+    if (electionType.toLowerCase().includes("scjn") || electionType.toLowerCase().includes("suprema corte")) {
+      category = "scjn"
+    } else if (electionType.toLowerCase().includes("tdj") || electionType.toLowerCase().includes("disciplina judicial")) {
+      category = "tdj"
+    } else if (electionType.toLowerCase().includes("sala superior") || electionType.toLowerCase().includes("tribunal electoral") && !electionType.toLowerCase().includes("regional")) {
+      category = "superior_tribunal_electoral"
+    } else if (electionType.toLowerCase().includes("sala regional") || electionType.toLowerCase().includes("regional tribunal")) {
+      category = "regional_tribunal_electoral"
+    } else if (electionType.toLowerCase().includes("juez") || electionType.toLowerCase().includes("jueces") || electionType.toLowerCase().includes("distrito")) {
+      category = "jueces_de_distrito"
+    } else if (electionType.toLowerCase().includes("magistrado") || electionType.toLowerCase().includes("circuito")) {
+      category = "magistrados_de_circuito"
+    }
+    
+    // If we still don't have a category, try to infer from other fields
+    if (!category) {
+      // Check if any field contains hints about the election type
+      const rowString = JSON.stringify(row).toLowerCase()
+      if (rowString.includes("scjn") || rowString.includes("suprema corte")) {
+        category = "scjn"
+      } else if (rowString.includes("tdj") || rowString.includes("disciplina judicial")) {
+        category = "tdj"
+      } else if (rowString.includes("sala superior") || (rowString.includes("tribunal electoral") && !rowString.includes("regional"))) {
+        category = "superior_tribunal_electoral"
+      } else if (rowString.includes("sala regional") || rowString.includes("regional tribunal")) {
+        category = "regional_tribunal_electoral"
+      } else if (rowString.includes("juez") || rowString.includes("jueces") || rowString.includes("distrito")) {
+        category = "jueces_de_distrito"
+      } else if (rowString.includes("magistrado") || rowString.includes("circuito")) {
+        category = "magistrados_de_circuito"
+      }
+    }
+    
+    // If we found a category, add the row to that category
+    if (category) {
+      categories[category].push(row)
     } else {
-      // If we can't determine the category, log it for debugging
-      console.log("Unknown election type:", electionType, row)
+      // If we still can't determine the category, put it in SCJN as a fallback
+      // and log it for debugging
+      console.log("Unknown election type, defaulting to SCJN:", JSON.stringify(row).substring(0, 100) + "...")
+      categories.scjn.push(row)
     }
   })
+  
+  // Log the counts for each category
+  for (const [category, rows] of Object.entries(categories)) {
+    console.log(`Category ${category}: ${rows.length} rows`)
+  }
   
   return categories
 }
@@ -97,171 +143,32 @@ async function createTables() {
   const tableDefinitions = {
     scjn: `
       CREATE TABLE IF NOT EXISTS scjn (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
     tdj: `
       CREATE TABLE IF NOT EXISTS tdj (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
     superior_tribunal_electoral: `
       CREATE TABLE IF NOT EXISTS superior_tribunal_electoral (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
     regional_tribunal_electoral: `
       CREATE TABLE IF NOT EXISTS regional_tribunal_electoral (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Circunscripción" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
     jueces_de_distrito: `
       CREATE TABLE IF NOT EXISTS jueces_de_distrito (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Especialidad" TEXT,
-        "Circuito judicial" TEXT,
-        "Distrito judicial" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
     magistrados_de_circuito: `
       CREATE TABLE IF NOT EXISTS magistrados_de_circuito (
-        id SERIAL PRIMARY KEY,
-        "Poder de la Unión" TEXT,
-        "Persona Candidata" TEXT,
-        "CurriculumV Persona Candidata" TEXT,
-        "Extracted_Text" TEXT,
-        "Número de lista en la boleta" TEXT,
-        "Correo electrónico público" TEXT,
-        "Página web" TEXT,
-        "Teléfono público" TEXT,
-        "Redes sociales" TEXT,
-        "¿Por qué quiero ocupar un cargo público?" TEXT,
-        "Visión de la función jurisdiccional" TEXT,
-        "Visión de la impartición de justicia" TEXT,
-        "Propuesta 1" TEXT,
-        "Propuesta 2" TEXT,
-        "Propuesta 3" TEXT,
-        "Trayectoria académica" TEXT,
-        "Grado máximo de estudios" TEXT,
-        "Estatus" TEXT,
-        "Poder Legislativo Federal" TEXT,
-        "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT,
-        "Especialidad" TEXT,
-        "Circuito judicial" TEXT,
-        "Distrito judicial" TEXT,
-        "Tipo de Elección" TEXT
+        id SERIAL PRIMARY KEY
       );
     `,
   }
@@ -282,6 +189,74 @@ async function createTables() {
     }
   }
 
+  return results
+}
+
+// Function to add columns to tables based on CSV data
+async function addColumnsToTables(data) {
+  const results = {}
+  
+  // Get all unique column names from the CSV data
+  const allColumns = new Set()
+  data.forEach(row => {
+    Object.keys(row).forEach(column => {
+      allColumns.add(column)
+    })
+  })
+  
+  console.log("All columns found in CSV:", Array.from(allColumns))
+  
+  // For each table, add all columns from the CSV
+  const tables = [
+    "scjn",
+    "tdj",
+    "superior_tribunal_electoral",
+    "regional_tribunal_electoral",
+    "jueces_de_distrito",
+    "magistrados_de_circuito",
+  ]
+  
+  for (const table of tables) {
+    try {
+      // Add each column to the table
+      for (const column of allColumns) {
+        // Skip empty column names
+        if (!column.trim()) continue
+        
+        // Escape the column name for SQL
+        const escapedColumn = column.replace(/"/g, '""')
+        
+        const sql = `
+          DO $$
+          BEGIN
+            BEGIN
+              ALTER TABLE ${table} ADD COLUMN "${escapedColumn}" TEXT;
+            EXCEPTION
+              WHEN duplicate_column THEN
+                -- Column already exists, do nothing
+            END;
+          END $$;
+        `
+        
+        const { error } = await supabaseAdmin.rpc("run_sql", { sql })
+        
+        if (error) {
+          console.error(`Error adding column "${escapedColumn}" to table ${table}:`, error)
+          if (!results[table]) results[table] = { columns: {} }
+          results[table].columns[column] = { success: false, error: error.message }
+        } else {
+          if (!results[table]) results[table] = { columns: {} }
+          results[table].columns[column] = { success: true }
+        }
+      }
+      
+      results[table].success = true
+    } catch (error) {
+      console.error(`Error adding columns to table ${table}:`, error)
+      results[table] = { success: false, error: error.message }
+    }
+  }
+  
   return results
 }
 
@@ -335,11 +310,13 @@ async function insertCSVData(categorizedData) {
       const { error } = await supabaseAdmin.from(tableName).insert(data)
 
       if (error) {
+        console.error(`Error inserting data into ${tableName}:`, error)
         results[tableName] = { success: false, error: error.message }
       } else {
         results[tableName] = { success: true, count: data.length }
       }
     } catch (error) {
+      console.error(`Error inserting data into ${tableName}:`, error)
       results[tableName] = { success: false, error: error.message }
     }
   }
@@ -409,36 +386,60 @@ async function createRunSqlFunctionCreator() {
 
 export async function GET() {
   try {
+    console.log("Starting database setup...")
+    
     // Step 1: Create the run_sql function creator
+    console.log("Step 1: Creating run_sql function creator...")
     const runSqlFunctionCreatorResult = await createRunSqlFunctionCreator()
+    console.log("Run SQL function creator result:", runSqlFunctionCreatorResult)
 
     // Step 2: Create the run_sql function
+    console.log("Step 2: Creating run_sql function...")
     const runSqlFunctionResult = await createRunSqlFunction()
+    console.log("Run SQL function result:", runSqlFunctionResult)
 
     // Step 3: Create tables
+    console.log("Step 3: Creating tables...")
     const createTablesResult = await createTables()
+    console.log("Create tables result:", createTablesResult)
 
-    // Step 4: Disable RLS
-    const disableRLSResult = await disableRLS()
-
-    // Step 5: Fetch and process CSV data
+    // Step 4: Fetch and process CSV data
+    console.log("Step 4: Fetching CSV data...")
     let csvData = []
     let csvError = null
     let categorizedData = {}
     
     try {
       csvData = await fetchCSVData()
+      console.log("CSV data fetched, rows:", csvData.length)
+      
+      // Step 5: Add columns to tables based on CSV data
+      console.log("Step 5: Adding columns to tables...")
+      const addColumnsResult = await addColumnsToTables(csvData)
+      console.log("Add columns result:", addColumnsResult)
+      
+      // Step 6: Categorize data
+      console.log("Step 6: Categorizing data...")
       categorizedData = categorizeDataByElection(csvData)
     } catch (error) {
+      console.error("Error processing CSV:", error)
       csvError = error.message
     }
 
-    // Step 6: Insert CSV data
+    // Step 7: Disable RLS
+    console.log("Step 7: Disabling RLS...")
+    const disableRLSResult = await disableRLS()
+    console.log("Disable RLS result:", disableRLSResult)
+
+    // Step 8: Insert CSV data
+    console.log("Step 8: Inserting CSV data...")
     const insertDataResult = csvError ? 
       { error: csvError } : 
       await insertCSVData(categorizedData)
+    console.log("Insert data result:", insertDataResult)
 
-    // Step 7: Check if tables have data
+    // Step 9: Check if tables have data
+    console.log("Step 9: Checking tables for data...")
     const tableChecks = {}
 
     for (const tableName of Object.keys(categorizedData)) {
@@ -446,15 +447,20 @@ export async function GET() {
         const { count, error } = await supabaseAdmin.from(tableName).select("*", { count: "exact", head: true })
 
         if (error) {
+          console.error(`Error checking table ${tableName}:`, error)
           tableChecks[tableName] = { success: false, error: error.message }
         } else {
+          console.log(`Table ${tableName} has ${count} rows`)
           tableChecks[tableName] = { success: true, count }
         }
       } catch (error) {
+        console.error(`Error checking table ${tableName}:`, error)
         tableChecks[tableName] = { success: false, error: error.message }
       }
     }
 
+    console.log("Database setup complete!")
+    
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       runSqlFunctionCreator: runSqlFunctionCreatorResult,
@@ -474,6 +480,7 @@ export async function GET() {
       message: "Database setup complete. Please check the results for any errors."
     })
   } catch (error) {
+    console.error("Server error:", error)
     return NextResponse.json(
       {
         error: `Server error: ${error.message}`
