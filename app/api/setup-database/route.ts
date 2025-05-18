@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import Papa from "papaparse"
 
 // Create a Supabase client with the service role key for admin operations
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rombsaksgbnhhltfhzkb.supabase.co"
@@ -7,189 +8,88 @@ const serviceRoleKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJvbWJzYWtzZ2JuaGhsdGZoemtiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzE0MTc0MiwiZXhwIjoyMDYyNzE3NzQyfQ.YPwxZ_EAHMxWqOw75cMg7Ug2_Qspp4Sew-Ya--GZCFM"
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
-// Sample data for each table (just a few records for testing)
-const sampleData = {
-  scjn: [
-    {
-      "Poder de la Unión": "Poder Judicial",
-      "Persona Candidata": "TORTOLERO SERRANO MAURICIO RICARDO III",
-      "CurriculumV Persona Candidata":
-        "https://candidaturaspoderjudicial.ine.mx/cycc/documentos/ficha/TORTOLERO_SERRANO_MAURICIO_RICARDO_III_4107.pdf",
-      "Número de lista en la boleta": "64",
-      "Correo electrónico público": "mauricioricardollltortoleroser@gmail.com",
-      "Página web": "La candidatura no proporcionó información",
-      "Teléfono público": "2221138564",
-      "Redes sociales": "https://x.com/MauRicardoIII\nhttps://www.instagram.com/mauricioricardolll/",
-      "¿Por qué quiero ocupar un cargo público?":
-        "Me postulo para Ministro de la Suprema Corte para fortalecer el Estado de Derecho y defender los Derechos Humanos.",
-      "Visión de la función jurisdiccional":
-        "Mi visión sobre la función jurisdiccional se centra en la imparcialidad, la independencia y la protección efectiva de los Derechos Humanos.",
-      "Visión de la impartición de justicia":
-        "Mi propuesta de visión de la impartición de justicia se basa en la defensa irrestricta de la Constitución.",
-      "Propuesta 1": "Fortalecer la capacitación continua de los jueces.",
-      "Propuesta 2": "Garantizar la accesibilidad y eficiencia del sistema judicial.",
-      "Propuesta 3": "Promover la transparencia y la rendición de cuentas.",
-      "Trayectoria académica":
-        "Doctor Cum Laude en Derecho, Máster en Derecho Comunitario, Diplomado en Juicio de Amparo, Licenciado en Derecho.",
-      "Grado máximo de estudios": "Doctorado",
-      Estatus: "Cédula profesional",
-      "Poder Legislativo Federal": "0",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "0",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
-  tdj: [
-    {
-      "Poder de la Unión": "Poder Ejecutivo",
-      "Persona Candidata": "ZUÑIGA MENDOZA JOSE ARTEMIO",
-      "CurriculumV Persona Candidata":
-        "https://candidaturaspoderjudicial.ine.mx/cycc/documentos/ficha/ZUÑIGA_MENDOZA_JOSE_ARTEMIO_18668.pdf",
-      "Número de lista en la boleta": "38",
-      "Correo electrónico público": "joseartemiozuniga@gmail.com",
-      "Página web": "https://artemiozuniga.com/",
-      "Teléfono público": "5534662277",
-      "Redes sociales": "https://x.com/joseartemioz\nhttps://www.instagram.com/jose.artemio.z/.",
-      "¿Por qué quiero ocupar un cargo público?":
-        "Para devolver al Pueblo el Poder a través de la Justicia, a las víctimas, a los olvidados y así servir a nuestro México.",
-      "Visión de la función jurisdiccional":
-        "Veo personas juzgadoras honestas, imparciales, justas, independientes, solidarias, capaces, sensibles, transparentes.",
-      "Visión de la impartición de justicia":
-        "Estoy convencido que el Sistema de Justicia se construye, que cada una de las personas constituye un eslabón.",
-      "Propuesta 1":
-        "Revolución de la Justicia. Proponemos la creación de una Aplicación Sencilla de denuncia ciudadana.",
-      "Propuesta 2":
-        "Justicia Digital. Integrar las nuevas tecnologías e inteligencia artificial para hacer una justicia más cercana y transparente.",
-      "Propuesta 3":
-        "Sistema anticorrupción. Consolidar una Conciencia de Legalidad basada en un nuevo Código de Ética Judicial.",
-      "Trayectoria académica":
-        "Doctorante, Maestría en Derecho, Especialidad en Penal y en Admón. y Procuración de Justicia, Licenciado en Derecho.",
-      "Grado máximo de estudios": "Doctorado",
-      Estatus: "Concluido",
-      "Poder Legislativo Federal": "0",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "1",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
-  superior_tribunal_electoral: [
-    {
-      "Poder de la Unión": "Poder Legislativo",
-      "Persona Candidata": "WONG MERAZ CESAR LORENZO",
-      "CurriculumV Persona Candidata":
-        "https://candidaturaspoderjudicial.ine.mx/cycc/documentos/ficha/WONG_MERAZ_CESAR_LORENZO_122.pdf",
-      "Número de lista en la boleta": "15",
-      "Correo electrónico público": "cesarwong.pj@ine.mx",
-      "Página web": "https://cesarwong.mx",
-      "Teléfono público": "5561953769",
-      "Redes sociales": "https://x.com/cesarlwong\nhttps://www.instagram.com/cesar.wongm",
-      "¿Por qué quiero ocupar un cargo público?":
-        "Abonar con mis conocimientos y experiencia la construcción de una justicia electoral única en México.",
-      "Visión de la función jurisdiccional":
-        "Cercana a la gente, con una política de puertas abiertas, de entrada y salida.",
-      "Visión de la impartición de justicia":
-        "La justicia no solo es darle a cada quien lo que merece, sino explicar, el dar a conocer los elementos esenciales.",
-      "Propuesta 1": "Mayor difusión de las tareas que hace un Magistrado, con lenguaje ciudadano.",
-      "Propuesta 2": "Hacer observatorio de las sentencias que se emiten en el tribunal, abiertas a la sociedad.",
-      "Propuesta 3":
-        "Que la elección de los secretarios de estudio y cuenta sean por concurso y así tener a los más capacitados.",
-      "Trayectoria académica":
-        "Soy Doctor en Derecho, Maestro en diversas áreas, catedrático e investigador en Derecho Electoral con amplia trayectoria.",
-      "Grado máximo de estudios": "Doctorado",
-      Estatus: "Concluido",
-      "Poder Legislativo Federal": "1",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "0",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
-  regional_tribunal_electoral: [
-    {
-      "Poder de la Unión": "En Funciones",
-      "Persona Candidata": "TRINIDAD JIMENEZ FABIAN",
-      "CurriculumV Persona Candidata":
-        "https://candidaturaspoderjudicial.ine.mx/cycc/documentos/ficha/TRINIDAD_JIMENEZ_FABIAN_18466.pdf",
-      "Número de lista en la boleta": "20",
-      "Correo electrónico público": "20trinidadjimenezfabian@gmail.com",
-      "Página web": "La candidatura no proporcionó información",
-      "Teléfono público": "7229628595",
-      "Redes sociales": "https://x.com/febo91mx\nhttps://www.instagram.com/febo91mx",
-      "¿Por qué quiero ocupar un cargo público?":
-        "Para continuar contribuyendo a una impartición de justicia que mejore la vida de las personas.",
-      "Visión de la función jurisdiccional":
-        "Las personas juzgadoras deben continuar buscando la cercanía a la ciudadanía y el entendimiento de sus sentencias.",
-      "Visión de la impartición de justicia":
-        "Una impartición de justicia sensible a los problemas y contextos de las personas que demandan nuestro servicio público.",
-      "Propuesta 1": "Profesionalización constante en la materia en que se imparte justicia.",
-      "Propuesta 2": "Sensibilización de las realidades en que se insertan los problemas jurídicos de las personas.",
-      "Propuesta 3":
-        "Seguimiento, evaluación y mejora de la forma en que las sentencias impactan en la vida de las personas.",
-      "Trayectoria académica": "Profesor universitario en licenciatura y maestría de derecho electoral.",
-      "Grado máximo de estudios": "Maestría",
-      Estatus: "Cédula profesional",
-      "Poder Legislativo Federal": "0",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "0",
-      Circunscripción: "5",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
-  jueces_de_distrito: [
-    {
-      "Poder de la Unión": "Poder Judicial",
-      "Persona Candidata": "JUEZ DE DISTRITO EJEMPLO",
-      "CurriculumV Persona Candidata": "https://ejemplo.com/curriculum.pdf",
-      "Número de lista en la boleta": "1",
-      "Correo electrónico público": "juez@ejemplo.com",
-      "Página web": "https://ejemplo.com",
-      "Teléfono público": "5555555555",
-      "Redes sociales": "https://x.com/juez\nhttps://www.instagram.com/juez",
-      "¿Por qué quiero ocupar un cargo público?": "Para servir a la justicia y al pueblo de México.",
-      "Visión de la función jurisdiccional": "Una justicia imparcial y efectiva para todos.",
-      "Visión de la impartición de justicia": "Garantizar el acceso a la justicia para todos los ciudadanos.",
-      "Propuesta 1": "Modernización del sistema judicial.",
-      "Propuesta 2": "Capacitación continua para jueces.",
-      "Propuesta 3": "Transparencia en los procesos judiciales.",
-      "Trayectoria académica": "Licenciado en Derecho, Maestro en Derecho Constitucional.",
-      "Grado máximo de estudios": "Maestría",
-      Estatus: "Titulado",
-      "Poder Legislativo Federal": "0",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "0",
-      Especialidad: "Civil",
-      "Circuito judicial": "Primer Circuito",
-      "Distrito judicial": "Ciudad de México",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
-  magistrados_de_circuito: [
-    {
-      "Poder de la Unión": "Poder Judicial",
-      "Persona Candidata": "MAGISTRADO DE CIRCUITO EJEMPLO",
-      "CurriculumV Persona Candidata": "https://ejemplo.com/curriculum.pdf",
-      "Número de lista en la boleta": "1",
-      "Correo electrónico público": "magistrado@ejemplo.com",
-      "Página web": "https://ejemplo.com",
-      "Teléfono público": "5555555555",
-      "Redes sociales": "https://x.com/magistrado\nhttps://www.instagram.com/magistrado",
-      "¿Por qué quiero ocupar un cargo público?": "Para contribuir a la justicia en México.",
-      "Visión de la función jurisdiccional": "Una justicia accesible y efectiva para todos.",
-      "Visión de la impartición de justicia": "Garantizar el respeto a los derechos humanos en todos los procesos.",
-      "Propuesta 1": "Digitalización de expedientes judiciales.",
-      "Propuesta 2": "Mejora en los tiempos de resolución.",
-      "Propuesta 3": "Capacitación especializada para magistrados.",
-      "Trayectoria académica": "Doctor en Derecho, Maestro en Derecho Constitucional.",
-      "Grado máximo de estudios": "Doctorado",
-      Estatus: "Titulado",
-      "Poder Legislativo Federal": "0",
-      "Poder Judicial de la Federación": "1",
-      "Poder Ejecutivo Federal": "0",
-      Especialidad: "Penal",
-      "Circuito judicial": "Segundo Circuito",
-      "Distrito judicial": "Estado de México",
-      Extracted_Text: "Texto extraído del curriculum",
-    },
-  ],
+// Function to fetch CSV data from GitHub
+async function fetchCSVData() {
+  try {
+    // Get the raw content URL for your CSV file
+    // This assumes the file is in a public repository
+    // You may need to adjust this URL based on your actual GitHub repository
+    const csvUrl = "/app/setup/Master_File - Hoja 1 (1).csv"
+    
+    // Try to fetch the CSV file from the local project first
+    let response
+    try {
+      response = await fetch(csvUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch local CSV: ${response.status}`)
+      }
+    } catch (localError) {
+      console.log("Could not fetch local CSV, trying raw GitHub URL...")
+      // If local fetch fails, try to fetch from GitHub raw content
+      // Replace with your actual GitHub username and repository name
+      const rawGithubUrl = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/app/setup/Master_File%20-%20Hoja%201%20(1).csv"
+      response = await fetch(rawGithubUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch GitHub CSV: ${response.status}`)
+      }
+    }
+
+    const csvText = await response.text()
+    
+    // Parse the CSV data
+    return new Promise((resolve, reject) => {
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          resolve(results.data)
+        },
+        error: (error) => {
+          reject(error)
+        }
+      })
+    })
+  } catch (error) {
+    console.error("Error fetching CSV data:", error)
+    throw error
+  }
+}
+
+// Function to categorize data by election type
+function categorizeDataByElection(data) {
+  // Initialize categories
+  const categories = {
+    scjn: [],
+    tdj: [],
+    superior_tribunal_electoral: [],
+    regional_tribunal_electoral: [],
+    jueces_de_distrito: [],
+    magistrados_de_circuito: []
+  }
+  
+  // Categorize each row based on the "Tipo de Elección" column
+  data.forEach(row => {
+    const electionType = row["Tipo de Elección"]?.toLowerCase() || ""
+    
+    if (electionType.includes("scjn") || electionType.includes("suprema corte")) {
+      categories.scjn.push(row)
+    } else if (electionType.includes("tdj") || electionType.includes("disciplina judicial")) {
+      categories.tdj.push(row)
+    } else if (electionType.includes("sala superior") || electionType.includes("tribunal electoral")) {
+      categories.superior_tribunal_electoral.push(row)
+    } else if (electionType.includes("sala regional") || electionType.includes("regional tribunal")) {
+      categories.regional_tribunal_electoral.push(row)
+    } else if (electionType.includes("juez") || electionType.includes("jueces") || electionType.includes("distrito")) {
+      categories.jueces_de_distrito.push(row)
+    } else if (electionType.includes("magistrado") || electionType.includes("circuito")) {
+      categories.magistrados_de_circuito.push(row)
+    } else {
+      // If we can't determine the category, log it for debugging
+      console.log("Unknown election type:", electionType, row)
+    }
+  })
+  
+  return categories
 }
 
 // Function to create tables with the correct structure
@@ -218,7 +118,8 @@ async function createTables() {
         "Estatus" TEXT,
         "Poder Legislativo Federal" TEXT,
         "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT
+        "Poder Ejecutivo Federal" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
     tdj: `
@@ -244,7 +145,8 @@ async function createTables() {
         "Estatus" TEXT,
         "Poder Legislativo Federal" TEXT,
         "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT
+        "Poder Ejecutivo Federal" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
     superior_tribunal_electoral: `
@@ -270,7 +172,8 @@ async function createTables() {
         "Estatus" TEXT,
         "Poder Legislativo Federal" TEXT,
         "Poder Judicial de la Federación" TEXT,
-        "Poder Ejecutivo Federal" TEXT
+        "Poder Ejecutivo Federal" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
     regional_tribunal_electoral: `
@@ -297,7 +200,8 @@ async function createTables() {
         "Poder Legislativo Federal" TEXT,
         "Poder Judicial de la Federación" TEXT,
         "Poder Ejecutivo Federal" TEXT,
-        "Circunscripción" TEXT
+        "Circunscripción" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
     jueces_de_distrito: `
@@ -326,7 +230,8 @@ async function createTables() {
         "Poder Ejecutivo Federal" TEXT,
         "Especialidad" TEXT,
         "Circuito judicial" TEXT,
-        "Distrito judicial" TEXT
+        "Distrito judicial" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
     magistrados_de_circuito: `
@@ -355,7 +260,8 @@ async function createTables() {
         "Poder Ejecutivo Federal" TEXT,
         "Especialidad" TEXT,
         "Circuito judicial" TEXT,
-        "Distrito judicial" TEXT
+        "Distrito judicial" TEXT,
+        "Tipo de Elección" TEXT
       );
     `,
   }
@@ -411,16 +317,21 @@ async function disableRLS() {
   return results
 }
 
-// Function to insert sample data
-async function insertSampleData() {
+// Function to insert data from CSV
+async function insertCSVData(categorizedData) {
   const results = {}
 
-  for (const [tableName, data] of Object.entries(sampleData)) {
+  for (const [tableName, data] of Object.entries(categorizedData)) {
+    if (data.length === 0) {
+      results[tableName] = { success: true, count: 0, message: "No data to insert" }
+      continue
+    }
+    
     try {
       // First, clear the table
       await supabaseAdmin.from(tableName).delete().neq("id", 0)
 
-      // Then insert the sample data
+      // Then insert the data
       const { error } = await supabaseAdmin.from(tableName).insert(data)
 
       if (error) {
@@ -510,13 +421,27 @@ export async function GET() {
     // Step 4: Disable RLS
     const disableRLSResult = await disableRLS()
 
-    // Step 5: Insert sample data
-    const insertDataResult = await insertSampleData()
+    // Step 5: Fetch and process CSV data
+    let csvData = []
+    let csvError = null
+    let categorizedData = {}
+    
+    try {
+      csvData = await fetchCSVData()
+      categorizedData = categorizeDataByElection(csvData)
+    } catch (error) {
+      csvError = error.message
+    }
 
-    // Step 6: Check if tables have data
+    // Step 6: Insert CSV data
+    const insertDataResult = csvError ? 
+      { error: csvError } : 
+      await insertCSVData(categorizedData)
+
+    // Step 7: Check if tables have data
     const tableChecks = {}
 
-    for (const tableName of Object.keys(sampleData)) {
+    for (const tableName of Object.keys(categorizedData)) {
       try {
         const { count, error } = await supabaseAdmin.from(tableName).select("*", { count: "exact", head: true })
 
@@ -536,16 +461,24 @@ export async function GET() {
       runSqlFunction: runSqlFunctionResult,
       createTables: createTablesResult,
       disableRLS: disableRLSResult,
+      csvData: {
+        success: !csvError,
+        error: csvError,
+        count: csvData.length,
+        categoryCounts: Object.fromEntries(
+          Object.entries(categorizedData).map(([key, value]) => [key, value.length])
+        )
+      },
       insertData: insertDataResult,
       tableChecks,
-      message: "Database setup complete. Please check the results for any errors.",
+      message: "Database setup complete. Please check the results for any errors."
     })
   } catch (error) {
     return NextResponse.json(
       {
-        error: `Server error: ${error.message}`,
+        error: `Server error: ${error.message}`
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
